@@ -5,6 +5,7 @@
 // ========== Theme Color ========== //
 // Config here to change theme color
 // Default | Mint Green | Cobalt Blue | Hot Pink | Dark Violet
+// eric 改绿色主题
 $theme-color-config: 'Mint Green';
 
 // Default theme color map
@@ -188,7 +189,9 @@ $content-table-border-color: darken($deputy-color, 3%) !default;
 
 // ========== Code ========== //
 // Color of the code.
-$code-color: #c7254e !default;
+// $code-color: #c7254e !default;
+// eric 代码颜色
+$code-color: #66D9EF !default;
 
 // Font size of code.
 $code-font-size: 0.9em !default;
@@ -258,7 +261,9 @@ $code-type-list: (
 ) !default;
 
 // Color of the code background.
-$code-background: $deputy-color !default;
+// $code-background: $deputy-color !default;
+// eric 代码背景
+$code-background: #272822 !default;
 
 
 // ========== Pagination ========== //
