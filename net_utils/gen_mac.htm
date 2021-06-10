@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>随机mac地址生成器</title>
+		</script>		
+	</head>
+	<body>
+	<div align="left" style="padding: 5px;">
+	随机mac地址生成器
+	</div>
+	<div align="left" style="padding: 5px;">
+	<textarea id="mac_str" style="width:256px;height:300px;resize: none;border: 1px solid #ccc;outline: none;"></textarea>
+	</div>
+
+	<button id="btn_get_mac" type="button" onclick="get_mac()" style="width:200px;height:50px">生成随机mac地址</button>
+	</div>
+	
+	<script type="text/javascript">
+	
+function gen_mac(prefix)
+{
+    var mac = prefix || '54:52:00';
+
+    for (var i = 0; i < 6; i++)
+    {
+        if (i % 2 === 0)
+            mac += ':';
+        mac += Math.floor(Math.random() * 16).toString(16);
+    }
+
+    return mac;
+};
+
+function get_mac()
+{
+    var t = document.getElementById("mac_str");
+    t.value += gen_mac() + "\n";
+}
+	</script>
+	</body>
+</html>
+
