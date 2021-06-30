@@ -3,6 +3,7 @@
 
 <head>
 	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width,initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 	<title>二维码生成器</title>
 	<script type="text/javascript" src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs/qrcode.min.js">
 	</script>
@@ -14,11 +15,11 @@
 	</div>
 	<div align="left" style="padding: 5px;">
 		<textarea id="qrcode_str"
-			style="width:256px;height:100px;resize: none;border: 1px solid #ccc;outline: none;">在这里输入文字</textarea>
+			style="width:300px;height:220px;resize: none;border: 1px solid #ccc;outline: none;">在这里输入文字</textarea>
 	</div>
 	<div id="qrcode" align="left" style="padding: 5px;"></div>
 	<div align="left" style="padding: 5px;">
-		<button id="btn_get_qrcode" type="button" onclick="get_qrcode()" style="width:200px;height:40px">生成二维码</button>
+		<button id="btn_get_qrcode" type="button" onclick="get_qrcode()" style="width:260px;height:40px">生成二维码</button>
 	</div>
 
 	<script type="text/javascript">
