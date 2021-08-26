@@ -3,7 +3,7 @@ title: "关于"
 date: 2021-04-25T15:15:52+08:00
 lastmod: 2021-04-25T15:15:52+08:00
 menu: "main"
-weight: 50
+weight: 70
 
 ---
 
@@ -17,5 +17,5 @@ weight: 50
 
 - ![](/images/bilibili.png) &nbsp; [哔哩哔哩]( https://space.bilibili.com/221010336)
 
-商务合作：fs104300@outlook.com
+商务邮箱：fs104300@outlook.com
 

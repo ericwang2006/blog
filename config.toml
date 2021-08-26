@@ -35,18 +35,23 @@ copyright = ""            # default: author.name ↓        # 默认为下面配
   identifier = "home"
   url = "/"
 [[menu.main]]
-  name = "归档"
+  name = "视频"
   weight = 20
+  identifier = "videos"
+  url = "/categories/视频/"
+[[menu.main]]
+  name = "归档"
+  weight = 30
   identifier = "archives"
   url = "/post/"
 [[menu.main]]
   name = "标签"
-  weight = 30
+  weight = 40
   identifier = "tags"
   url = "/tags/"
 [[menu.main]]
   name = "分类"
-  weight = 40
+  weight = 50
   identifier = "categories"
   url = "/categories/"
 
