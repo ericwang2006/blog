@@ -9,7 +9,7 @@ weight: 70
 
 # 有用 有趣 有温度！
 
-- ![](/images/youtube.png) &nbsp; [youtube]( https://www.youtube.com/c/ericwang618)
+- ![](/images/youtube.png) &nbsp; [youtube]( https://youtube.com/@firstsunlight)
 
 - ![](/images/bilibili.png) &nbsp; [哔哩哔哩]( https://space.bilibili.com/221010336)
 
