@@ -75,6 +75,274 @@ try {
         return preg_replace('/[^a-zA-Z0-9.-]/', '', trim($input));
     }
 
+    function checkTCPPort($ip, $port)
+    {
+        error_log("执行TCP端口测试: $ip:$port");
+
+        $result = ['ret' => 0, 'msg' => ''];
+
+        // 创建TCP socket
+        $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+        if ($socket === false) {
+            $result['msg'] = '无法创建TCP socket: ' . socket_strerror(socket_last_error());
+            return $result;
+        }
+
+        // 设置socket选项
+        socket_set_option($socket, SOL_SOCKET, SO_RCVTIMEO, array('sec' => 10, 'usec' => 0));
+        socket_set_option($socket, SOL_SOCKET, SO_SNDTIMEO, array('sec' => 10, 'usec' => 0));
+
+        // 设置非阻塞模式以便控制超时
+        socket_set_nonblock($socket);
+
+        $start_time = time();
+
+        // 尝试连接
+        $connect_result = @socket_connect($socket, $ip, intval($port));
+
+        if ($connect_result === false) {
+            $error = socket_last_error($socket);
+
+            // EINPROGRESS 表示连接正在进行中（非阻塞模式正常情况）
+            if ($error == SOCKET_EINPROGRESS || $error == SOCKET_EALREADY) {
+                // 使用select等待连接完成，超时10秒
+                $read = array();
+                $write = array($socket);
+                $except = array($socket);
+
+                $select_result = socket_select($read, $write, $except, 10, 0);
+
+                if ($select_result === false) {
+                    socket_close($socket);
+                    $result['msg'] = 'Socket select失败: ' . socket_strerror(socket_last_error());
+                } elseif ($select_result === 0) {
+                    // 超时
+                    socket_close($socket);
+                    $result['msg'] = "TCP连接超时";
+                } elseif (in_array($socket, $except)) {
+                    // 连接异常
+                    socket_close($socket);
+                    $result['msg'] = "TCP连接异常";
+                } elseif (in_array($socket, $write)) {
+                    // 检查是否真正连接成功
+                    $so_error = socket_get_option($socket, SOL_SOCKET, SO_ERROR);
+                    socket_close($socket);
+
+                    if ($so_error === 0) {
+                        $result['ret'] = 1;
+                        $result['msg'] = "TCP端口 {$port} 开放，连接成功";
+                    } else {
+                        $result['msg'] = "TCP端口 {$port} 连接被拒绝";
+                    }
+                }
+            } else {
+                socket_close($socket);
+                if ($error == SOCKET_ECONNREFUSED) {
+                    $result['msg'] = "TCP端口 {$port} 连接被拒绝，端口关闭";
+                } elseif ($error == SOCKET_ETIMEDOUT) {
+                    $result['msg'] = "TCP端口 {$port} 连接超时";
+                } elseif ($error == SOCKET_EHOSTUNREACH) {
+                    $result['msg'] = "主机 {$ip} 不可达";
+                } elseif ($error == SOCKET_ENETUNREACH) {
+                    $result['msg'] = "网络不可达";
+                } else {
+                    $result['msg'] = "TCP端口 {$port} 连接失败: " . socket_strerror($error);
+                }
+            }
+        } else {
+            // 立即连接成功
+            socket_close($socket);
+            $result['ret'] = 1;
+            $result['msg'] = "TCP端口 {$port} 开放，连接成功";
+        }
+
+        $execution_time = time() - $start_time;
+        error_log("TCP检测完成，耗时: {$execution_time}秒");
+
+        return $result;
+    }
+
+    function checkUDPPort($ip, $port)
+    {
+        error_log("执行UDP端口测试: $ip:$port");
+
+        $result = ['ret' => 0, 'msg' => ''];
+
+        // 创建UDP socket
+        $socket = @socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
+        if ($socket === false) {
+            $result['msg'] = '无法创建UDP socket: ' . socket_strerror(socket_last_error());
+            return $result;
+        }
+
+        // 设置超时选项
+        @socket_set_option($socket, SOL_SOCKET, SO_RCVTIMEO, array('sec' => 5, 'usec' => 0));
+        @socket_set_option($socket, SOL_SOCKET, SO_SNDTIMEO, array('sec' => 5, 'usec' => 0));
+
+        $start_time = time();
+
+        // 准备测试数据包
+        $test_data = getUDPProbeData($port);
+
+        // 发送测试数据包
+        $bytes_sent = @socket_sendto($socket, $test_data, strlen($test_data), 0, $ip, intval($port));
+
+        if ($bytes_sent === false) {
+            $error = socket_last_error($socket);
+            $error_msg = socket_strerror($error);
+            socket_close($socket);
+
+            if ($error == SOCKET_EHOSTUNREACH) {
+                $result['msg'] = "主机 {$ip} 不可达";
+            } elseif ($error == SOCKET_ENETUNREACH) {
+                $result['msg'] = "网络不可达";
+            } elseif ($error == SOCKET_ECONNREFUSED) {
+                $result['msg'] = "UDP端口 {$port} 连接被拒绝（端口关闭）";
+            } elseif ($error == SOCKET_ETIMEDOUT) {
+                $result['msg'] = "UDP端口 {$port} 发送超时";
+            } else {
+                $result['msg'] = "UDP端口 {$port} 发送失败: " . $error_msg;
+            }
+
+            return $result;
+        }
+
+        // 尝试接收响应 - 简化版本
+        $response = '';
+        $from_ip = '';
+        $from_port = 0;
+
+        // 设置socket为非阻塞模式
+        @socket_set_nonblock($socket);
+
+        // 等待响应，最多尝试3秒
+        $max_wait = 3;
+        $wait_time = 0;
+        $received = false;
+
+        while ($wait_time < $max_wait && !$received) {
+            $bytes_received = @socket_recvfrom($socket, $response, 1024, MSG_DONTWAIT, $from_ip, $from_port);
+
+            if ($bytes_received !== false && $bytes_received > 0) {
+                socket_close($socket);
+                $result['ret'] = 1;
+                $result['msg'] = "UDP端口 {$port} 开放（收到 {$bytes_received} 字节响应）";
+
+                // 如果能识别服务类型，添加到消息中
+                $service_info = identifyUDPService($port, $response);
+                if (!empty($service_info)) {
+                    $result['msg'] .= " - {$service_info}";
+                }
+
+                return $result;
+            }
+
+            // 如果没有收到数据，等待100ms再试
+            usleep(100000); // 100ms
+            $wait_time += 0.1;
+        }
+
+        socket_close($socket);
+
+        $execution_time = time() - $start_time;
+        error_log("UDP检测完成，耗时: {$execution_time}秒");
+
+        // UDP特殊处理：发送成功但无响应
+        if ($bytes_sent > 0) {
+            $result['ret'] = 1; // 保守地认为可能开放
+            $result['msg'] = "UDP端口 {$port} 可能开放（数据发送成功，但无响应）";
+
+            // 添加常见服务提示
+            $common_service = getCommonUDPService($port);
+            if (!empty($common_service)) {
+                $result['msg'] .= " - 可能是 {$common_service} 服务";
+            }
+        } else {
+            $result['msg'] = "UDP端口 {$port} 状态未知";
+        }
+
+        return $result;
+    }
+
+    function getUDPProbeData($port)
+    {
+        // 针对常见UDP服务返回特定的探测数据
+        switch (intval($port)) {
+            case 53: // DNS
+                return "\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x07example\x03com\x00\x00\x01\x00\x01";
+
+            case 123: // NTP
+                return "\x1b" . str_repeat("\x00", 47);
+
+            case 161: // SNMP
+                return "\x30\x26\x02\x01\x00\x04\x06public\xa0\x19\x02\x04\x00\x00\x00\x00\x02\x01\x00\x02\x01\x00\x30\x0b\x30\x09\x06\x05\x2b\x06\x01\x02\x01\x05\x00";
+
+            case 67: // DHCP
+            case 68:
+                return "\x01\x01\x06\x00\x12\x34\x56\x78\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
+
+            case 69: // TFTP
+                return "\x00\x01test\x00octet\x00";
+
+            case 514: // Syslog
+                return "<134>test message";
+
+            default:
+                // 通用探测数据
+                return "UDP_PORT_TEST_" . date('His');
+        }
+    }
+
+    function identifyUDPService($port, $response)
+    {
+        $port = intval($port);
+
+        // 简单的服务识别
+        switch ($port) {
+            case 53:
+                if (strlen($response) > 12)
+                    return "DNS服务";
+                break;
+            case 123:
+                if (strlen($response) == 48)
+                    return "NTP服务";
+                break;
+            case 161:
+                if (strpos($response, "\x30") === 0)
+                    return "SNMP服务";
+                break;
+            case 67:
+            case 68:
+                if (strlen($response) > 200)
+                    return "DHCP服务";
+                break;
+            case 514:
+                return "Syslog服务";
+                break;
+        }
+
+        return "";
+    }
+
+    function getCommonUDPService($port)
+    {
+        $common_udp_ports = [
+            53 => "DNS",
+            67 => "DHCP服务器",
+            68 => "DHCP客户端",
+            69 => "TFTP",
+            123 => "NTP",
+            161 => "SNMP",
+            162 => "SNMP Trap",
+            514 => "Syslog",
+            1194 => "OpenVPN",
+            4500 => "IPSec NAT-T",
+            5353 => "mDNS",
+        ];
+
+        return isset($common_udp_ports[intval($port)]) ? $common_udp_ports[intval($port)] : "";
+    }
+
     // 读取POST数据
     $json = file_get_contents("php://input");
 
@@ -126,162 +394,13 @@ try {
         throw new Exception('输入包含非法字符');
     }
 
-    // 使用纯PHP实现端口检测
+    // 执行端口检测
     if ($port_type == 0) {
         // TCP端口测试
-        error_log("执行TCP端口测试: $safe_ip:$safe_port");
-
-        // 创建TCP socket
-        $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
-        if ($socket === false) {
-            throw new Exception('无法创建TCP socket: ' . socket_strerror(socket_last_error()));
-        }
-
-        // 设置非阻塞模式以便控制超时
-        socket_set_nonblock($socket);
-
-        // 尝试连接
-        $connect_result = socket_connect($socket, $safe_ip, intval($safe_port));
-
-        if ($connect_result === false) {
-            $error = socket_last_error($socket);
-
-            // EINPROGRESS 表示连接正在进行中（非阻塞模式正常情况）
-            if ($error == SOCKET_EINPROGRESS || $error == SOCKET_EALREADY) {
-                // 使用select等待连接完成，超时10秒
-                $read = array();
-                $write = array($socket);
-                $except = array($socket);
-
-                $select_result = socket_select($read, $write, $except, 10, 0);
-
-                if ($select_result === false) {
-                    socket_close($socket);
-                    throw new Exception('Socket select失败: ' . socket_strerror(socket_last_error()));
-                } elseif ($select_result === 0) {
-                    // 超时
-                    socket_close($socket);
-                    $result['ret'] = 0;
-                    $result['msg'] = "TCP连接超时";
-                } elseif (in_array($socket, $except)) {
-                    // 连接异常
-                    socket_close($socket);
-                    $result['ret'] = 0;
-                    $result['msg'] = "TCP连接异常";
-                } elseif (in_array($socket, $write)) {
-                    // 检查是否真正连接成功
-                    $so_error = socket_get_option($socket, SOL_SOCKET, SO_ERROR);
-                    socket_close($socket);
-
-                    if ($so_error === 0) {
-                        $result['ret'] = 1;
-                        $result['msg'] = "TCP端口开放，连接成功";
-                    } else {
-                        $result['ret'] = 0;
-                        $result['msg'] = "TCP连接被拒绝";
-                    }
-                }
-            } else {
-                socket_close($socket);
-                $result['ret'] = 0;
-                if ($error == SOCKET_ECONNREFUSED) {
-                    $result['msg'] = "TCP连接被拒绝，端口可能关闭";
-                } elseif ($error == SOCKET_ETIMEDOUT) {
-                    $result['msg'] = "TCP连接超时";
-                } elseif ($error == SOCKET_EHOSTUNREACH) {
-                    $result['msg'] = "主机不可达";
-                } else {
-                    $result['msg'] = "TCP连接失败: " . socket_strerror($error);
-                }
-            }
-        } else {
-            // 立即连接成功
-            socket_close($socket);
-            $result['ret'] = 1;
-            $result['msg'] = "TCP端口开放，连接成功";
-        }
-
+        $result = checkTCPPort($safe_ip, $safe_port);
     } else {
-        // UDP端口测试 - 使用sudo nmap检测
-        error_log("执行UDP端口测试: $safe_ip:$safe_port");
-
-        // 构建nmap命令，使用sudo执行
-        $nmap_cmd = 'sudo /usr/bin/nmap -sU -p ' . escapeshellarg($safe_port) .
-            ' -T4 --max-retries 2 --host-timeout 20s --max-rtt-timeout 1000ms ' .
-            escapeshellarg($safe_ip) . ' 2>/dev/null';
-
-        error_log("执行nmap命令: $nmap_cmd");
-
-        // 执行nmap命令
-        $output = array();
-        $return_code = 0;
-
-        // 设置超时执行
-        $start_time = time();
-        exec($nmap_cmd, $output, $return_code);
-        $execution_time = time() - $start_time;
-
-        if ($execution_time > 25) {
-            $result['ret'] = 0;
-            $result['msg'] = "UDP端口检测超时";
-        } elseif ($return_code !== 0 && $return_code !== 1) {
-            // nmap返回码不是0或1
-            $result['ret'] = 0;
-            $result['msg'] = "nmap执行出错，返回码: $return_code";
-            error_log("nmap执行出错: " . implode("\n", $output));
-        } else {
-            // 解析nmap输出
-            $output_text = implode("\n", $output);
-            error_log("nmap输出: " . $output_text);
-
-            // 解析UDP扫描结果
-            if (preg_match('/(\d+)\/udp\s+([^\s]+)(?:\s+(.*))?/i', $output_text, $matches)) {
-                $port_num = $matches[1];
-                $state = strtolower($matches[2]);
-                $service = isset($matches[3]) ? trim($matches[3]) : '';
-
-                switch ($state) {
-                    case 'open':
-                        $result['ret'] = 1;
-                        $result['msg'] = "UDP端口 {$port_num} 开放" . ((!empty($service) && trim($service) !== '') ? " (服务: " . trim($service) . ")" : "");
-                        break;
-
-                    case 'closed':
-                        $result['ret'] = 0;
-                        $result['msg'] = "UDP端口 {$port_num} 关闭";
-                        break;
-
-                    case 'filtered':
-                        $result['ret'] = 0;
-                        $result['msg'] = "UDP端口 {$port_num} 被过滤（可能被防火墙阻止）";
-                        break;
-
-                    case 'open|filtered':
-                        $result['ret'] = 0;
-                        $result['msg'] = "UDP端口 {$port_num} 状态不确定（开放或被过滤）" . ((!empty($service) && trim($service) !== '') ? " - 可能是" . trim($service) . "服务" : "");
-                        break;
-
-                    default:
-                        $result['ret'] = 0;
-                        $result['msg'] = "UDP端口 {$port_num} 状态: $state";
-                        break;
-                }
-            } elseif (preg_match('/Host seems down|no response received/i', $output_text)) {
-                $result['ret'] = 0;
-                $result['msg'] = "目标主机无响应或不可达";
-            } elseif (preg_match('/could not resolve|Name or service not known/i', $output_text)) {
-                $result['ret'] = 0;
-                $result['msg'] = "无法解析主机名";
-            } elseif (empty(trim($output_text))) {
-                $result['ret'] = 0;
-                $result['msg'] = "nmap未返回结果，请检查网络连接或目标地址";
-            } else {
-                // 无法解析输出，返回原始信息
-                $result['ret'] = 0;
-                $result['msg'] = "UDP端口检测完成，但状态不明确";
-                error_log("无法解析nmap输出: " . $output_text);
-            }
-        }
+        // UDP端口测试
+        $result = checkUDPPort($safe_ip, $safe_port);
     }
 
 }
