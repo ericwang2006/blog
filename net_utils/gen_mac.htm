@@ -2,43 +2,198 @@
 <html>
 
 <head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width,initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-	<title>随机mac地址生成器</title>
-	</script>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>随机MAC地址生成器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .panel {
+            padding: 5px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .input_panel {
+            padding: 5px;
+        }
+
+        .mac_textarea {
+            resize: none;
+            width: 100%;
+            height: 200px;
+            border: 1px solid #ccc;
+            outline: none;
+            padding: 10px;
+            box-sizing: border-box;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .info_text {
+            resize: none;
+            width: 100%;
+            height: 40px;
+            border: 1px solid #ccc;
+            outline: none;
+            padding: 8px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+
+        button {
+            width: 100%;
+            max-width: 260px;
+            padding: 10px;
+            background-color: #428bca;
+            border-color: #357ebd;
+            color: #fff;
+            border-radius: 10px;
+            text-align: center;
+            vertical-align: middle;
+            border: 1px solid transparent;
+            font-weight: 900;
+            font-size: 125%;
+            cursor: pointer;
+            margin-top: 5px;
+        }
+
+        button:hover {
+            background-color: #357ebd;
+        }
+
+        button:active {
+            background-color: #2d6ca3;
+        }
+
+        .dialog_readme {
+            color: #0000FF;
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #e6f3ff;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .button_group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .button_group button {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+
+            .button_group button {
+                width: 100%;
+                max-width: none;
+            }
+
+            button {
+                max-width: none;
+            }
+        }
+    </style>
 </head>
 
 <body>
-	<div align="left" style="padding: 5px;">
-		随机mac地址生成器
-	</div>
-	<div align="left" style="padding: 5px;">
-		<textarea id="mac_str"
-			style="width:300px;height:200px;resize: none;border: 1px solid #ccc;outline: none;"></textarea>
-	</div>
-	<div align="left" style="padding: 5px;">
-		<button id="btn_get_mac" type="button" onclick="get_mac()" style="width:260px;height:40px">生成随机mac地址</button>
-	</div>
+    <h2>随机MAC地址生成器</h2>
 
-	<script type="text/javascript">
+    <div>
+        <div class="panel">MAC地址前缀（可选）</div>
+        <div class="input_panel">
+            <input id="mac_prefix" maxlength="17" class="info_text" placeholder="例如：54:52:00 (留空则使用默认前缀)">
+        </div>
 
-		function gen_mac(prefix) {
-			var mac = prefix || '54:52:00';
+        <div class="panel">生成的MAC地址</div>
+        <div class="input_panel">
+            <textarea id="mac_str" class="mac_textarea" placeholder="点击下方按钮生成MAC地址..." readonly></textarea>
+        </div>
 
-			for (var i = 0; i < 6; i++) {
-				if (i % 2 === 0)
-					mac += ':';
-				mac += Math.floor(Math.random() * 16).toString(16);
-			}
+        <div class="input_panel button_group">
+            <button type="button" onclick="get_mac()">生成一个MAC地址</button>
+            <button type="button" onclick="get_multiple_mac()">生成10个MAC地址</button>
+        </div>
 
-			return mac;
-		};
+        <div class="input_panel">
+            <button type="button" onclick="clear_mac()">清空</button>
+        </div>
 
-		function get_mac() {
-			var t = document.getElementById("mac_str");
-			t.value += gen_mac() + "\n";
-		}
-	</script>
+        <div class="dialog_readme">
+            <strong>说明：</strong>
+            <ul style="margin: 5px 0; padding-left: 20px;">
+                <li>默认使用 54:52:00 作为MAC地址前缀</li>
+                <li>可以自定义前缀，格式如：AA:BB:CC</li>
+                <li>生成的MAC地址会追加到文本框中</li>
+                <li>常见前缀：54:52:00 (QEMU), 00:50:56 (VMware), 08:00:27 (VirtualBox)</li>
+            </ul>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        function gen_mac(prefix) {
+            var mac = prefix || '54:52:00';
+
+            for (var i = 0; i < 6; i++) {
+                if (i % 2 === 0)
+                    mac += ':';
+                mac += Math.floor(Math.random() * 16).toString(16);
+            }
+
+            return mac;
+        }
+
+        function get_mac() {
+            var prefix = document.getElementById("mac_prefix").value.trim();
+            var t = document.getElementById("mac_str");
+
+            if (prefix && !isValidPrefix(prefix)) {
+                alert("MAC前缀格式不正确！正确格式如：54:52:00");
+                return;
+            }
+
+            t.value += gen_mac(prefix || undefined) + "\n";
+            t.scrollTop = t.scrollHeight;
+        }
+
+        function get_multiple_mac() {
+            var prefix = document.getElementById("mac_prefix").value.trim();
+            var t = document.getElementById("mac_str");
+
+            if (prefix && !isValidPrefix(prefix)) {
+                alert("MAC前缀格式不正确！正确格式如：54:52:00");
+                return;
+            }
+
+            for (var i = 0; i < 10; i++) {
+                t.value += gen_mac(prefix || undefined) + "\n";
+            }
+            t.scrollTop = t.scrollHeight;
+        }
+
+        function clear_mac() {
+            document.getElementById("mac_str").value = "";
+        }
+
+        function isValidPrefix(prefix) {
+            // 验证MAC前缀格式 (如：AA:BB:CC 或 AA:BB:CC:DD:EE 等)
+            var re = /^([0-9A-Fa-f]{2}:){1,5}[0-9A-Fa-f]{2}$/;
+            return re.test(prefix);
+        }
+    </script>
 </body>
 
 </html>

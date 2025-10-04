@@ -13,6 +13,7 @@ weight: 60
 2. [mac地址生成器](https://www.126126.xyz/net/gen_mac.htm)
 3. [二维码生成器](https://www.126126.xyz/net/qrgen.htm)
 4. [端口测试](https://www.126126.xyz/net/port_check.php)
+5. [htpasswd生成器](https://www.126126.xyz/net/htpasswd.htm)
 
 ![](/images/cat.png)**自用机场**
 
